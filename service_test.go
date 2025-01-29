@@ -9,9 +9,18 @@ import (
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/joho/godotenv"
+	"log"
 	"os"
 	"testing"
 )
+
+func init() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+}
 
 func TestLighthouseService_AssertTokenAccountInstruction_Decode(t *testing.T) {
 	sig := solana.MustSignatureFromBase58("2CJ8oLPbtYmjtcXMjn1u89QVX3EJWJDzjR1HQWw1nDSqQpHWuLQhbecDMSRXXg9bkSWFy8AmckE7Ue4RpjTddQtd")
@@ -108,35 +117,100 @@ func TestLighthouseService_AssertTokenAccountAmountInstruction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = txn.Sign(func(key solana.PublicKey) *solana.PrivateKey {
-		return &kp
+	txn.Signatures = []solana.Signature{solana.Signature{}}
+
+	sim, err := c.Raw().SimulateTransactionWithOpts(context.TODO(), txn, &rpc.SimulateTransactionOpts{
+		SigVerify:  false,
+		Commitment: rpc.CommitmentProcessed,
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Sim: %+v\n", sim.Value)
+
+	if sim.Value.Err != nil {
+		t.Fatal(sim.Value.Err)
+	}
+}
+
+func TestLighthouseService_AssertAccountInfoInstruction(t *testing.T) {
+	c := rpc_cached.New(os.Getenv("RPC_URL"))
+
+	hash, err := c.GetLatestBlockhash()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := LighthouseService{}
+	if err := svc.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	kp, err := solana.PrivateKeyFromSolanaKeygenFile(os.Getenv("TEST_KEYPAIR"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accInfo, err := c.GetAccountInfo(kp.PublicKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lamports := accInfo.Value.Lamports - 5002 //Remove tx cost & gas
+
+	t.Logf("Asserting lamports == %v", lamports)
+	ix, err := svc.AssertAccountInfoInstruction(kp.PublicKey(), lighthouse.AccountInfoAssertions{
+		{
+			Lamports: &lamports,
+			Operator: uint8(lighthouse.IntegerOperator_Equal),
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//sim, err := c.Raw().SimulateTransactionWithOpts(context.TODO(), txn, &rpc.SimulateTransactionOpts{
-	//	SigVerify:  false,
-	//	Commitment: rpc.CommitmentProcessed,
-	//})
-	//
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//t.Logf("Sim: %+v\n", sim.Value)
-	//
-	//if sim.Value.Err != nil {
-	//	t.Fatal(sim.Value.Err)
-	//}
+	d, _ := ix.Data()
+	t.Logf("Data: %v", d)
 
-	sig, err := c.Raw().SendTransactionWithOpts(context.TODO(), txn, rpc.TransactionOpts{SkipPreflight: true})
+	txn, err := solana.NewTransaction([]solana.Instruction{
+		NewComputeBudgetSetUnitPriceInstruction(200),
+		NewComputeBudgetSetUnitLimitInstruction(10_000),
+		ix,
+	}, hash.Value.Blockhash, solana.TransactionPayer(kp.PublicKey()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("Sig: %s", sig)
+	txn.Signatures = []solana.Signature{solana.Signature{}}
+	//_, err = txn.Sign(func(key solana.PublicKey) *solana.PrivateKey {
+	//	return &kp
+	//})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//sig, err := c.Raw().SendTransactionWithOpts(context.TODO(), txn, rpc.TransactionOpts{SkipPreflight: true})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//log.Printf("Sig: %s", sig)
 
+	sim, err := c.Raw().SimulateTransactionWithOpts(context.TODO(), txn, &rpc.SimulateTransactionOpts{
+		SigVerify:  false,
+		Commitment: rpc.CommitmentProcessed,
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Sim: %+v\n", sim.Value)
+
+	if sim.Value.Err != nil {
+		t.Fatal(sim.Value.Err)
+	}
 }
 
 func NewComputeBudgetSetUnitLimitInstruction(units uint32) solana.Instruction {

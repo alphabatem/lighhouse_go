@@ -542,11 +542,151 @@ func (t TokenAccountAssertion) UnmarshalWithDecoder(decoder *ag_binary.Decoder) 
 	return decoder.Decode(&t.Operator)
 }
 
+type AccountInfoAssertions []*AccountInfoAssertion
+
+// Placeholders for assertions
+type AccountInfoAssertion struct {
+	Lamports   *uint64
+	DataLength *uint64
+	Owner      *ag_solanago.PublicKey
+	RentEpoch  *uint64
+	IsSigner   *bool
+	IsWritable *bool
+	Executable *bool
+
+	Operator uint8
+}
+
+func (t *AccountInfoAssertion) Type() uint8 {
+	if t.Lamports != nil {
+		return 0
+	}
+	if t.DataLength != nil {
+		return 1
+	}
+	if t.Owner != nil {
+		return 2
+	}
+	//Known Owner = 3
+	if t.RentEpoch != nil {
+		return 4
+	}
+	if t.IsSigner != nil {
+		return 5
+	}
+	if t.IsWritable != nil {
+		return 6
+	}
+	if t.Executable != nil {
+		return 7
+	}
+	//VerifyDatahash = 8
+
+	return 99
+}
+
+func (t AccountInfoAssertion) MarshalWithEncoder(encoder *ag_binary.Encoder) (err error) {
+	err = encoder.WriteUint8(t.Type())
+	if err != nil {
+		return err
+	}
+
+	if t.Lamports != nil {
+		err = encoder.WriteUint64(*t.Lamports, binary.LittleEndian)
+		if err != nil {
+			return err
+		}
+	}
+	if t.DataLength != nil {
+		err = encoder.WriteUint64(*t.DataLength, binary.LittleEndian)
+		if err != nil {
+			return err
+		}
+	}
+	if t.Owner != nil {
+		_, err = encoder.Write(t.Owner.Bytes())
+		if err != nil {
+			return err
+		}
+	}
+	if t.RentEpoch != nil {
+		err = encoder.WriteUint64(*t.RentEpoch, binary.LittleEndian)
+		if err != nil {
+			return err
+		}
+	}
+	if t.IsSigner != nil {
+		err = encoder.WriteBool(*t.IsSigner)
+		if err != nil {
+			return err
+		}
+	}
+	if t.IsWritable != nil {
+		err = encoder.WriteBool(*t.IsWritable)
+		if err != nil {
+			return err
+		}
+	}
+	if t.Executable != nil {
+		err = encoder.WriteBool(*t.Executable)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = encoder.WriteUint8(t.Operator)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t AccountInfoAssertion) UnmarshalWithDecoder(decoder *ag_binary.Decoder) (err error) {
+	byt, err := decoder.ReadUint8()
+	if err != nil {
+		return err
+	}
+
+	switch byt {
+
+	case 0: //Lamports
+		if err := decoder.Decode(t.Lamports); err != nil {
+			return err
+		}
+	case 1: //DataLength
+		if err := decoder.Decode(t.DataLength); err != nil {
+			return err
+		}
+	case 2: //Owner
+		if err := decoder.Decode(t.Owner); err != nil {
+			return err
+		}
+	case 4: //RentEpoch
+		if err := decoder.Decode(t.RentEpoch); err != nil {
+			return err
+		}
+	case 5: //IsSigner
+		if err := decoder.Decode(t.IsSigner); err != nil {
+			return err
+		}
+	case 6: //IsWritable
+		if err := decoder.Decode(t.IsWritable); err != nil {
+			return err
+		}
+	case 7: //Executable
+		if err := decoder.Decode(t.Executable); err != nil {
+			return err
+		}
+	default:
+		return errors.New(fmt.Sprintf("unknown assertation type (%v)", byt))
+	}
+
+	return decoder.Decode(&t.Operator)
+}
+
 type SysvarClockAssertion Assertion
 type StakeAccountAssertions Assertion
 type AccountDeltaAssertion Assertion
-type AccountInfoAssertion Assertion
-type AccountInfoAssertions Assertion
 type BubblegumTreeConfigAssertion Assertion
 type MerkleTreeAssertion Assertion
 type MintAccountAssertion Assertion

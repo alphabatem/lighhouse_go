@@ -45,6 +45,11 @@ func (svc *LighthouseService) AssertTokenAccountAmountInstruction(tokenAccount s
 	return ix.Build(), nil
 }
 
+func (svc *LighthouseService) AssertAccountInfoInstruction(account solana.PublicKey, assert []*lighthouse.AccountInfoAssertion) (solana.Instruction, error) {
+	ix := lighthouse.NewAssertAccountInfoMultiInstruction(svc.logLevel, assert, account)
+	return ix.Build(), nil
+}
+
 func (svc *LighthouseService) AssertTokenAccountInstruction(tokenAccount solana.PublicKey, assert []*lighthouse.TokenAccountAssertion) (solana.Instruction, error) {
 	ix := lighthouse.NewAssertTokenAccountMultiInstruction(svc.logLevel, assert, tokenAccount)
 

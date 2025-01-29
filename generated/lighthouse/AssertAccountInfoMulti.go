@@ -13,7 +13,7 @@ import (
 // AssertAccountInfoMulti is the `AssertAccountInfoMulti` instruction.
 type AssertAccountInfoMulti struct {
 	LogLevel   *LogLevel
-	Assertions *AccountInfoAssertions
+	Assertions AccountInfoAssertions
 
 	// [0] = [] targetAccount
 	// ··········· Target account to be asserted
@@ -36,7 +36,7 @@ func (inst *AssertAccountInfoMulti) SetLogLevel(logLevel LogLevel) *AssertAccoun
 
 // SetAssertions sets the "assertions" parameter.
 func (inst *AssertAccountInfoMulti) SetAssertions(assertions AccountInfoAssertions) *AssertAccountInfoMulti {
-	inst.Assertions = &assertions
+	inst.Assertions = assertions
 	return inst
 }
 
@@ -101,7 +101,7 @@ func (inst *AssertAccountInfoMulti) EncodeToTree(parent ag_treeout.Branches) {
 					// Parameters of the instruction:
 					instructionBranch.Child("Params[len=2]").ParentFunc(func(paramsBranch ag_treeout.Branches) {
 						paramsBranch.Child(ag_format.Param("  LogLevel", *inst.LogLevel))
-						paramsBranch.Child(ag_format.Param("Assertions", *inst.Assertions))
+						paramsBranch.Child(ag_format.Param("Assertions", inst.Assertions))
 					})
 
 					// Accounts of the instruction:
@@ -118,24 +118,47 @@ func (obj AssertAccountInfoMulti) MarshalWithEncoder(encoder *ag_binary.Encoder)
 	if err != nil {
 		return err
 	}
-	// Serialize `Assertions` param:
-	err = encoder.Encode(obj.Assertions)
+
+	err = encoder.WriteUint8(uint8(len(obj.Assertions)))
 	if err != nil {
 		return err
+	}
+
+	// Serialize `Assertions` param:
+	for _, at := range obj.Assertions {
+		err := at.MarshalWithEncoder(encoder)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 func (obj *AssertAccountInfoMulti) UnmarshalWithDecoder(decoder *ag_binary.Decoder) (err error) {
+	{
+		_, _ = decoder.ReadUint8()
+	}
+
 	// Deserialize `LogLevel`:
 	err = decoder.Decode(&obj.LogLevel)
 	if err != nil {
 		return err
 	}
-	// Deserialize `Assertions`:
-	err = decoder.Decode(&obj.Assertions)
+
+	assertCount, err := decoder.ReadUint8()
 	if err != nil {
 		return err
 	}
+
+	// Deserialize `Assertions`:
+	for i := uint8(0); i < assertCount; i++ {
+		var assert AccountInfoAssertion
+
+		if err := assert.UnmarshalWithDecoder(decoder); err != nil {
+			return err
+		}
+		obj.Assertions = append(obj.Assertions, &assert)
+	}
+
 	return nil
 }
 
